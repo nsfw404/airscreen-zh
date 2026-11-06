@@ -1,9 +1,9 @@
-name: Build
+name: Build AirScreen 简体中文版
 
 on:
   push:
     branches: [main]
-    tags: ['v*']
+    tags: ["v*-cn*"]
   pull_request:
   workflow_dispatch:
 
@@ -11,34 +11,82 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  build-windows:
+    name: Windows x64 编译与安装包
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Enable MSVC x64 environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
 
       - name: Install OpenSSL and Inno Setup
+        shell: pwsh
         run: choco install openssl innosetup -y --no-progress
 
-      - name: Build
-        run: powershell -ExecutionPolicy Bypass -File scripts\build.ps1
-
-      - name: Build installer
+      - name: Locate OpenSSL
         shell: pwsh
         run: |
-          $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '0.0.0' }
-          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
-          $crt = Get-ChildItem "$vs\VC\Redist\MSVC\*\x64\Microsoft.VC14*.CRT" -Directory | Sort-Object FullName | Select-Object -Last 1
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DCrtDir=$($crt.FullName)" "/DMyAppVersion=$version" scripts\airscreen.iss
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          Get-FileHash out\installer\*.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } | Set-Content out\installer\SHA256SUMS.txt
+          $candidates = @(
+            "$env:ProgramFiles\OpenSSL-Win64",
+            "$env:ProgramFiles\OpenSSL",
+            "C:\OpenSSL-Win64"
+          )
+          $openssl = $candidates | Where-Object { Test-Path "$_\include\openssl\ssl.h" } | Select-Object -First 1
+          if (-not $openssl) {
+            throw "OpenSSL headers not found after installation. Checked: $($candidates -join ', ')"
+          }
+          "OPENSSL_ROOT_DIR=$openssl" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Using OpenSSL: $openssl"
 
-      - uses: actions/upload-artifact@v4
+      - name: Build AirScreen
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path "build\Release\AirScreen.exe")) {
+            throw "Build completed but build\Release\AirScreen.exe was not found."
+          }
+
+      - name: Build Chinese installer
+        shell: pwsh
+        run: |
+          $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '1.1.0-cn' }
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products * -property installationPath
+          if (-not $vs) { throw "Visual Studio installation not found." }
+          $crtRoot = Join-Path $vs "VC\Redist\MSVC"
+          $crt = Get-ChildItem $crtRoot -Directory | Sort-Object Name -Descending | ForEach-Object {
+            Get-ChildItem (Join-Path $_.FullName "x64") -Directory -Filter "Microsoft.VC*.CRT" -ErrorAction SilentlyContinue
+          } | Select-Object -First 1
+          if (-not $crt) { throw "MSVC x64 runtime (Microsoft.VC*.CRT) not found." }
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { throw "Inno Setup compiler not found: $iscc" }
+          & $iscc "/DCrtDir=$($crt.FullName)" "/DMyAppVersion=$version" scripts\airscreen.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $installer = Get-ChildItem out\installer\*.exe -File
+          if (-not $installer) { throw "Installer EXE was not generated." }
+          Get-FileHash $installer.FullName -Algorithm SHA256 | ForEach-Object {
+            "$($_.Hash.ToLower())  $($installer.Name)"
+          } | Set-Content out\installer\SHA256SUMS.txt
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: AirScreen-installer
+          name: AirScreen-简体中文版-Windows-x64
           path: out/installer/*
+          if-no-files-found: error
+          retention-days: 30
 
-      - name: Publish release
-        if: github.ref_type == 'tag'
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ github.ref_name }}" out/installer/* --generate-notes
+        run: |
+          $files = Get-ChildItem out\installer -File | ForEach-Object { $_.FullName }
+          gh release create $env:GITHUB_REF_NAME $files --title "AirScreen 简体中文版 $env:GITHUB_REF_NAME" --generate-notes
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

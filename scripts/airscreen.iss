@@ -22,7 +22,7 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}/issues
 AppUpdatesURL={#MyAppURL}/releases
-VersionInfoVersion={#MyAppVersion}
+VersionInfoVersion=1.1.0.0
 DefaultDirName={autopf}\AirScreen-简体中文版
 DefaultGroupName=AirScreen 简体中文版
 OutputDir=..\out\installer
@@ -41,12 +41,10 @@ SetupLogging=yes
 CloseApplications=yes
 
 [Files]
-; Only the DLLs AirScreen.exe imports, plus the app-local Visual C++ runtime
+; Include the executable and all runtime DLLs copied by CMake (FFmpeg/OpenSSL).
+; This avoids missing transitive FFmpeg DLL dependencies in the installed app.
 Source: "{#BuildDir}\AirScreen.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#BuildDir}\avcodec-*.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#BuildDir}\avutil-*.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#BuildDir}\swresample-*.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#BuildDir}\libcrypto-*-x64.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#BuildDir}\*.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#CrtDir}\msvcp140.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#CrtDir}\vcruntime140.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#CrtDir}\vcruntime140_1.dll"; DestDir: "{app}"; Flags: ignoreversion
