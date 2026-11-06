@@ -66,10 +66,10 @@ file(GLOB PLIST_SRC
 )
 add_library(plist STATIC ${PLIST_SRC})
 target_include_directories(plist PUBLIC
-    "${PLIST_DIR}/include"
-    "${PLIST_DIR}"
-    "${PLIST_DIR}/src"
-    "${PLIST_DIR}/libcnary/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/libplist"
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/libplist/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/libplist/src"
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/libplist/libcnary/include"
 )
 target_compile_definitions(plist PUBLIC LIBPLIST_STATIC HAVE_CONFIG_H)
 
@@ -97,7 +97,8 @@ target_include_directories(airplay PUBLIC
     "${UXPLAY_DIR}/lib"
     "${UXPLAY_DIR}/lib/playfair"
     "${UXPLAY_DIR}/lib/llhttp"
-    "${PLIST_DIR}/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/libplist"
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/libplist/include"
 )
 target_link_libraries(airplay PUBLIC
     playfair
